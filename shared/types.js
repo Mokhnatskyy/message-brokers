@@ -46,7 +46,7 @@
 /**
  * Event routing keys for RabbitMQ topic exchange bindings
  */
-const RoutingKeys = {
+export const RoutingKeys = {
   JOB_CREATED: "job.created",
   JOB_COMPLETED: "job.completed",
   JOB_FAILED: "job.failed",
@@ -60,7 +60,7 @@ const RoutingKeys = {
  * @param {string} [causationId]
  * @returns {EventEnvelope}
  */
-function createEventEnvelope(eventType, payload, correlationId, causationId) {
+export function createEventEnvelope(eventType, payload, correlationId, causationId) {
   return {
     eventId: generateId(),
     eventType,
@@ -76,12 +76,6 @@ function createEventEnvelope(eventType, payload, correlationId, causationId) {
  * Simple ID generator (replace with UUID in production)
  * @returns {string}
  */
-function generateId() {
+export function generateId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
-
-module.exports = {
-  RoutingKeys,
-  createEventEnvelope,
-  generateId,
-};

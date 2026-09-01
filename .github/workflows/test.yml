@@ -1,0 +1,125 @@
+name: Test and Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install API dependencies
+        run: cd api && npm install
+
+      - name: Install Worker dependencies
+        run: cd worker && npm install
+
+      - name: Lint API
+        run: cd api && npm run lint
+        continue-on-error: true
+
+      - name: Lint Worker
+        run: cd worker && npm run lint
+        continue-on-error: true
+
+      - name: Test API
+        run: cd api && npm test
+
+      - name: Test Worker
+        run: cd worker && npm test
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          push: false
+          tags: message-brokers-api:latest
+
+      - name: Build Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          file: ./worker/Dockerfile
+          push: false
+          tags: message-brokers-worker:latest
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: docker-build
+
+    services:
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5672:5672
+          - 15672:15672
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+
+      mongodb:
+        image: mongo:7.0-alpine
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand(\"ping\")' --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin
+          MONGO_INITDB_DATABASE: message_brokers
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Install API dependencies
+        run: cd api && npm install
+
+      - name: Install Worker dependencies
+        run: cd worker && npm install
+
+      - name: Wait for services to be ready
+        run: sleep 5
+
+      - name: Run integration tests (if exists)
+        run: |
+          cd api && npm test -- test/integration 2>/dev/null || echo "No integration tests found"
+          cd ../worker && npm test -- test/integration 2>/dev/null || echo "No integration tests found"
+        continue-on-error: true

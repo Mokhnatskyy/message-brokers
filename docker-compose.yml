@@ -1,0 +1,93 @@
+version: "3.9"
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: toca-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - message-brokers-net
+
+  mongodb:
+    image: mongo:8.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGO_INITDB_DATABASE: message_brokers
+    healthcheck:
+      test: mongosh --eval 'db.runCommand("ping")' --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - message-brokers-net
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: toca-api
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      MONGODB_URI: mongodb://admin:admin@mongodb:27017/message_brokers?authSource=admin
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./api/src:/app/src
+      - ./shared:/app/shared
+    networks:
+      - message-brokers-net
+    command: npm run dev
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: toca-worker
+    environment:
+      NODE_ENV: development
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      MONGODB_URI: mongodb://admin:admin@mongodb:27017/message_brokers?authSource=admin
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./worker/src:/app/src
+      - ./shared:/app/shared
+    networks:
+      - message-brokers-net
+    command: npm run dev
+
+volumes:
+  rabbitmq_data:
+  mongodb_data:
+
+networks:
+  message-brokers-net:
+    driver: bridge

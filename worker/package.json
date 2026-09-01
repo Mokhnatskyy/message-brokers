@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "lint": "eslint src --ext .js"
+    "lint": "eslint src --ext .js",
+    "test": "node --test test/**/*.test.js",
+    "test:watch": "node --watch --test test/**/*.test.js"
   },
   "keywords": ["worker", "consumer", "rabbitmq"],
   "author": "",
