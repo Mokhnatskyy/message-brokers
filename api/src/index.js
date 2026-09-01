@@ -17,7 +17,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -26,7 +26,7 @@ app.get("/health", (req, res) => {
 });
 
 // Root endpoint
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.json({
     message: "Message Brokers API",
     version: "0.0.1",
@@ -113,18 +113,18 @@ process.on("SIGTERM", shutdown);
 async function start() {
   try {
     // Connect to MongoDB
+    console.log("Connecting to MongoDB...");
     await connectMongoDB(process.env.MONGODB_URI);
 
     // Connect to RabbitMQ
+    console.log("Connecting to RabbitMQ...");
     await connectRabbitMQ(process.env.RABBITMQ_URL);
 
     app.listen(PORT, () => {
-      console.log(`API server running on http://localhost:${PORT}`);
-      console.log(`RABBITMQ_URL: ${process.env.RABBITMQ_URL}`);
-      console.log(`MONGODB_URI: ${process.env.MONGODB_URI}`);
+      console.log(`✓ API server running on http://localhost:${PORT}`);
     });
   } catch (err) {
-    console.error("Failed to start API:", err);
+    console.error("✗ Failed to start API:", err.message);
     process.exit(1);
   }
 }

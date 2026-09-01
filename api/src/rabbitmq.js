@@ -8,6 +8,7 @@ let channel = null;
 
 /**
  * Connect to RabbitMQ and ensure exchange/queue topology exists
+ * Publisher confirms enabled for reliable publishing
  */
 export async function connectRabbitMQ(url) {
   try {
@@ -19,10 +20,24 @@ export async function connectRabbitMQ(url) {
 
     channel = await connection.createChannel();
 
+    // Set up publisher confirms callback-based
+    channel.on("confirm", (deliveryTag, multiple) => {
+      console.log(`✓ Publisher confirm received (tag: ${deliveryTag})`);
+    });
+
+    channel.on("return", (msg) => {
+      console.warn("✗ Message returned by broker:", msg.properties.messageId);
+    });
+
+    // Enable confirms on this channel
+    channel.confirmSelect(() => {
+      console.log("Publisher confirms enabled");
+    });
+
     // Declare topic exchange
     await channel.assertExchange(EXCHANGE_NAME, "topic", { durable: true });
 
-    console.log("RabbitMQ connected and topology ready");
+    console.log("RabbitMQ connected with publisher confirms");
     return channel;
   } catch (err) {
     console.error("Failed to connect to RabbitMQ:", err);
@@ -32,7 +47,8 @@ export async function connectRabbitMQ(url) {
 
 /**
  * Publish an event to the topic exchange
- * Messages are persistent and will survive RabbitMQ restarts
+ * - Persistent messages survive RabbitMQ restarts
+ * - Publisher confirms ensure RabbitMQ acknowledges receipt
  */
 export async function publishEvent(routingKey, eventEnvelope) {
   if (!channel) {
@@ -41,19 +57,33 @@ export async function publishEvent(routingKey, eventEnvelope) {
 
   const message = Buffer.from(JSON.stringify(eventEnvelope));
 
-  channel.publish(
-    EXCHANGE_NAME,
-    routingKey,
-    message,
-    {
-      persistent: true,
-      contentType: "application/json",
-    }
-  );
+  return new Promise((resolve, reject) => {
+    try {
+      const ok = channel.publish(
+        EXCHANGE_NAME,
+        routingKey,
+        message,
+        {
+          persistent: true,
+          contentType: "application/json",
+          messageId: eventEnvelope.eventId, // Track by event ID
+        }
+      );
 
-  console.log(`✓ Event published: ${routingKey}`, {
-    eventId: eventEnvelope.eventId,
-    eventType: eventEnvelope.eventType,
+      if (!ok) {
+        return reject(new Error("Failed to queue message for publishing"));
+      }
+
+      console.log(`Event published: ${routingKey}`, {
+        eventId: eventEnvelope.eventId,
+        eventType: eventEnvelope.eventType,
+      });
+
+      resolve();
+    } catch (err) {
+      console.error("Error publishing event:", err);
+      reject(err);
+    }
   });
 }
 

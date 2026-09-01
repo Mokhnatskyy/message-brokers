@@ -7,7 +7,6 @@ const RETRY_QUEUE = "job.created.retry";
 const DLQ_EXCHANGE = "job-events-dlq";
 const DLQ_QUEUE = "job.created.dlq";
 const RETRY_TTL = 5000; // 5 seconds before retry
-const MAX_RETRIES = 3;
 const QUEUE_OPTIONS = { durable: true };
 
 let connection = null;

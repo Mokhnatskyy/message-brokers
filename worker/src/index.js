@@ -126,22 +126,22 @@ process.on("SIGTERM", shutdown);
 // Start worker
 async function main() {
   try {
-    console.log("Worker service starting...");
-    console.log(`RABBITMQ_URL: ${process.env.RABBITMQ_URL}`);
-    console.log(`MONGODB_URI: ${process.env.MONGODB_URI}`);
+    console.log("Worker starting...");
 
     // Connect to MongoDB
+    console.log("Connecting to MongoDB...");
     await connectMongoDB(process.env.MONGODB_URI);
 
     // Connect to RabbitMQ
+    console.log("Connecting to RabbitMQ...");
     await connectRabbitMQ(process.env.RABBITMQ_URL);
 
     // Start consuming messages
     await startConsuming(processJobCreated);
 
-    console.log("Worker ready to consume messages");
+    console.log("✓ Worker ready to consume messages");
   } catch (err) {
-    console.error("Worker failed:", err);
+    console.error("✗ Worker failed:", err.message);
     process.exit(1);
   }
 }
