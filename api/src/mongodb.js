@@ -19,6 +19,16 @@ export async function connectMongoDB(uri) {
     await jobs.createIndex({ status: 1 });
     await jobs.createIndex({ createdAt: 1 });
 
+    // Create indexes for idempotency collection
+    const idempotency = db.collection("idempotency");
+    await idempotency.createIndex({ eventId: 1 }, { unique: true });
+
+    // Create indexes for outbox collection
+    const outbox = db.collection("outbox");
+    await outbox.createIndex({ eventId: 1 }, { unique: true });
+    await outbox.createIndex({ published: 1 });
+    await outbox.createIndex({ createdAt: 1 });
+
     console.log("MongoDB connected");
     return db;
   } catch (err) {
@@ -50,7 +60,7 @@ export async function closeMongoDB() {
 /**
  * Create a new job document
  */
-export async function createJob(jobId, title, description) {
+export async function createJob(jobId, title, description, correlationId) {
   const jobs = db.collection("jobs");
 
   const job = {
@@ -58,12 +68,14 @@ export async function createJob(jobId, title, description) {
     title,
     description: description || "",
     status: "created",
+    correlationId,
     createdAt: new Date(),
     updatedAt: new Date(),
+    version: 1,
     events: [
       {
         eventType: "job.created",
-        timestamp: new Date(),
+        occurredAt: new Date(),
       },
     ],
   };
@@ -88,11 +100,12 @@ export async function updateJobStatus(jobId, newStatus, result = null) {
 
   const update = {
     $set: { status: newStatus, updatedAt: new Date() },
+    $inc: { version: 1 },
     $push: {
       events: {
         eventType:
           newStatus === "completed" ? "job.completed" : "job.failed",
-        timestamp: new Date(),
+        occurredAt: new Date(),
         result,
       },
     },
@@ -112,8 +125,15 @@ export async function recordIdempotencyKey(eventId, eventType) {
   try {
     await idempotency.insertOne({
       eventId,
+      consumer: "api",
       eventType,
+      status: "completed",
+      attempts: 1,
+      claimToken: eventId,
+      claimedAt: new Date(),
       processedAt: new Date(),
+      completedAt: new Date(),
+      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
     });
     return true;
   } catch (err) {
@@ -144,9 +164,15 @@ export async function storeOutboxEvent(eventId, routingKey, eventEnvelope) {
   try {
     await outbox.insertOne({
       eventId,
+      aggregateType: "job",
+      aggregateId: eventEnvelope.payload.jobId,
+      eventType: eventEnvelope.eventType,
+      version: eventEnvelope.version,
       routingKey,
       eventEnvelope,
-      published: false,
+      status: "pending",
+      attemptCount: 0,
+      nextAttemptAt: new Date(),
       createdAt: new Date(),
       publishedAt: null,
     });
@@ -169,7 +195,7 @@ export async function markOutboxPublished(eventId) {
     { eventId },
     {
       $set: {
-        published: true,
+        status: "published",
         publishedAt: new Date(),
       },
     }
@@ -182,7 +208,7 @@ export async function markOutboxPublished(eventId) {
  */
 export async function getUnpublishedOutboxEvents() {
   const outbox = db.collection("outbox");
-  return outbox.find({ published: false }).toArray();
+  return outbox.find({ status: "pending", nextAttemptAt: { $lte: new Date() } }).toArray();
 }
 
 /**
@@ -192,7 +218,7 @@ export async function cleanupPublishedOutbox() {
   const outbox = db.collection("outbox");
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const result = await outbox.deleteMany({
-    published: true,
+    status: "published",
     publishedAt: { $lt: oneDayAgo },
   });
   return result.deletedCount;

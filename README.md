@@ -1,15 +1,35 @@
-# message-brokers
+# Message Brokers: Event-Driven Architecture Learning Platform
 
-Learning RabbitMQ, messaging patterns, and async processing through a distributed event-driven architecture.
+A production-ready example of event-driven architecture with RabbitMQ, MongoDB, and Node.js. Implements 5 critical reliability patterns for guaranteed message delivery and idempotent processing.
 
-## Project Overview
+**Status:** ✅ All 5 Milestones Complete | 🎓 Comprehensive Documentation | ✅ Fully Tested
 
-This project builds an async processing platform with:
-- **API Service** — Express server that accepts commands and publishes events to RabbitMQ
-- **Worker Service** — Consumes events from RabbitMQ and processes jobs
-- **Event Contracts** — Shared event types and helpers for message envelope
-- **RabbitMQ** — Topic exchange for pub/sub messaging with routing keys
-- **MongoDB** — Stores job state, idempotency records, and processing history
+## Documentation
+
+**Start here:**
+- 📘 **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Complete system design & concepts (5 reliability patterns explained)
+- 📋 **[TESTING.md](./TESTING.md)** — Step-by-step testing guide for all features
+- 🏗️ **[AGENTS.md](./AGENTS.md)** — Architecture rules & coding guidelines
+
+## What This Project Demonstrates
+
+### Event-Driven Architecture
+- **Decoupled Services:** API and worker communicate via events, not direct calls
+- **Event Envelope:** Standard structure with trace IDs for observability
+- **Async Processing:** Jobs processed in background, non-blocking API responses
+
+### 5 Reliability Patterns (Milestone 4)
+1. **Publisher Confirms** — API waits for RabbitMQ to confirm message receipt
+2. **Consumer Idempotency** — Same event processed only once, even if redelivered
+3. **Retry Queue** — Failed messages auto-retry after 5 seconds via TTL
+4. **Dead-Letter Exchange (DLQ)** — Permanently failed messages stored for debugging
+5. **Outbox Pattern** — Events stored locally before publishing (no loss on RabbitMQ outage)
+
+### Services Included
+- **API Service** — Express server, accepts commands, publishes events
+- **Worker Service** — Consumes events, processes jobs, publishes results
+- **RabbitMQ** — Topic exchange with retry/DLQ topology
+- **MongoDB** — Stores job state, idempotency keys, event outbox
 
 ## Current Status
 

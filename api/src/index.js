@@ -59,7 +59,7 @@ app.post("/jobs", async (req, res) => {
     const correlationId = generateId();
 
     // Save job to MongoDB
-    await createJob(jobId, title, description);
+    await createJob(jobId, title, description, correlationId);
 
     // Create event envelope
     const event = createEventEnvelope(

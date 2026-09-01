@@ -63,11 +63,12 @@ export async function updateJobStatus(jobId, newStatus, result = null) {
 
   const update = {
     $set: { status: newStatus, updatedAt: new Date() },
+    $inc: { version: 1 },
     $push: {
       events: {
         eventType:
           newStatus === "completed" ? "job.completed" : "job.failed",
-        timestamp: new Date(),
+        occurredAt: new Date(),
         result,
       },
     },
@@ -87,9 +88,16 @@ export async function recordProcessedEvent(eventId, eventType) {
   try {
     await idempotency.insertOne({
       eventId,
+      consumer: "job-worker",
       eventType,
+      status: "completed",
+      attempts: 1,
+      claimToken: eventId,
+      claimedAt: new Date(),
       processedAt: new Date(),
       workerProcessed: true,
+      completedAt: new Date(),
+      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
     });
     return true;
   } catch (err) {

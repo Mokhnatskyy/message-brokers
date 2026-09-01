@@ -4,7 +4,7 @@ import {
   createEventEnvelope,
   RoutingKeys,
   generateId,
-} from "../shared/types.js";
+} from "../../shared/types.js";
 
 test("EventEnvelope - createEventEnvelope creates valid envelope", () => {
   const payload = { jobId: "123", title: "Test" };
