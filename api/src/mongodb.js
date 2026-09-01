@@ -133,3 +133,67 @@ export async function isEventProcessed(eventId) {
   const result = await idempotency.findOne({ eventId });
   return result !== null;
 }
+
+/**
+ * Outbox Pattern: Store event for reliable publishing
+ * Events are persisted before publishing to ensure delivery
+ */
+export async function storeOutboxEvent(eventId, routingKey, eventEnvelope) {
+  const outbox = db.collection("outbox");
+
+  try {
+    await outbox.insertOne({
+      eventId,
+      routingKey,
+      eventEnvelope,
+      published: false,
+      createdAt: new Date(),
+      publishedAt: null,
+    });
+    return true;
+  } catch (err) {
+    if (err.code === 11000) {
+      console.log(`Outbox event ${eventId} already exists`);
+      return false;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Mark outbox event as published
+ */
+export async function markOutboxPublished(eventId) {
+  const outbox = db.collection("outbox");
+  const result = await outbox.updateOne(
+    { eventId },
+    {
+      $set: {
+        published: true,
+        publishedAt: new Date(),
+      },
+    }
+  );
+  return result.modifiedCount > 0;
+}
+
+/**
+ * Get unpublished outbox events
+ */
+export async function getUnpublishedOutboxEvents() {
+  const outbox = db.collection("outbox");
+  return outbox.find({ published: false }).toArray();
+}
+
+/**
+ * Clean up old published outbox events (older than 24 hours)
+ */
+export async function cleanupPublishedOutbox() {
+  const outbox = db.collection("outbox");
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const result = await outbox.deleteMany({
+    published: true,
+    publishedAt: { $lt: oneDayAgo },
+  });
+  return result.deletedCount;
+}

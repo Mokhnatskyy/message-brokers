@@ -1,7 +1,15 @@
 import express from "express";
 import dotenv from "dotenv";
 import { connectRabbitMQ, publishEvent, closeRabbitMQ } from "./rabbitmq.js";
-import { connectMongoDB, createJob, getJob, closeMongoDB } from "./mongodb.js";
+import {
+  connectMongoDB,
+  createJob,
+  getJob,
+  closeMongoDB,
+  storeOutboxEvent,
+  markOutboxPublished,
+} from "./mongodb.js";
+import { startOutboxPublisher } from "./outbox-publisher.js";
 import {
   createEventEnvelope,
   RoutingKeys,
@@ -53,7 +61,7 @@ app.post("/jobs", async (req, res) => {
     // Save job to MongoDB
     await createJob(jobId, title, description);
 
-    // Publish job.created event
+    // Create event envelope
     const event = createEventEnvelope(
       RoutingKeys.JOB_CREATED,
       {
@@ -65,7 +73,23 @@ app.post("/jobs", async (req, res) => {
       correlationId
     );
 
-    await publishEvent(RoutingKeys.JOB_CREATED, event);
+    // Outbox Pattern: Store event in MongoDB first (guaranteed)
+    console.log(`Storing event in outbox: ${event.eventId}`);
+    await storeOutboxEvent(event.eventId, RoutingKeys.JOB_CREATED, event);
+
+    // Then publish to RabbitMQ (may fail, but event is in outbox)
+    try {
+      await publishEvent(RoutingKeys.JOB_CREATED, event);
+      // Mark as published in outbox
+      await markOutboxPublished(event.eventId);
+      console.log(`Event published and marked in outbox: ${event.eventId}`);
+    } catch (publishErr) {
+      console.error(
+        `Failed to publish event ${event.eventId}, will retry from outbox:`,
+        publishErr.message
+      );
+      // Event stays in outbox for outbox publisher service to retry
+    }
 
     res.status(201).json({
       jobId,
@@ -119,6 +143,10 @@ async function start() {
     // Connect to RabbitMQ
     console.log("Connecting to RabbitMQ...");
     await connectRabbitMQ(process.env.RABBITMQ_URL);
+
+    // Start outbox publisher (republishes unpublished events)
+    console.log("Starting outbox publisher...");
+    startOutboxPublisher(5000); // Check every 5 seconds
 
     app.listen(PORT, () => {
       console.log(`✓ API server running on http://localhost:${PORT}`);
