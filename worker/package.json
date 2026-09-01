@@ -1,0 +1,23 @@
+{
+  "name": "message-brokers-worker",
+  "version": "0.0.1",
+  "description": "Worker service for message-brokers",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "lint": "eslint src --ext .js"
+  },
+  "keywords": ["worker", "consumer", "rabbitmq"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "amqplib": "^0.10.3",
+    "mongodb": "^6.3.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.55.0"
+  }
+}

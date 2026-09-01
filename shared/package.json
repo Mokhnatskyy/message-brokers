@@ -1,0 +1,10 @@
+{
+  "name": "message-brokers-shared",
+  "version": "0.0.1",
+  "description": "Shared event types and contracts",
+  "main": "types.ts",
+  "private": true,
+  "keywords": ["events", "contracts"],
+  "author": "",
+  "license": "MIT"
+}
